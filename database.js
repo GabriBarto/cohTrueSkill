@@ -1,28 +1,36 @@
-const sqlite3 = require('sqlite3').verbose();
-const path = require('path');
+const { Pool } = require('pg');
 
-// Se siamo su Render useremo il disco fisso (/data), altrimenti usiamo la cartella locale
-const dbPath = process.env.DATABASE_PATH || path.join(__dirname, 'trueskill_2026.db');
-
-const db = new sqlite3.Database(dbPath, (err) => {
-    if (err) console.error("Errore apertura DB:", err.message);
-    else console.log("Database collegato a:", dbPath);
+// Si collega a Neon usando la stringa di connessione sicura
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false }
 });
 
-db.serialize(() => {
-    db.run(`CREATE TABLE IF NOT EXISTS quizzers (
-        username TEXT PRIMARY KEY,
-        mu REAL DEFAULT 25.0,
-        sigma REAL DEFAULT 8.333,
-        elo REAL DEFAULT 0.0
-    )`);
+// Inizializzazione tabelle (Sintassi Postgres)
+const initDB = async () => {
+    try {
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS quizzers (
+                username TEXT PRIMARY KEY,
+                mu REAL DEFAULT 25.0,
+                sigma REAL DEFAULT 8.333,
+                elo REAL DEFAULT 0.0
+            )
+        `);
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS match_history (
+                id SERIAL PRIMARY KEY,
+                data TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                show_name TEXT,
+                match_json TEXT
+            )
+        `);
+        console.log("Database Postgres pronto e connesso.");
+    } catch (err) {
+        console.error("Errore inizializzazione Postgres:", err.message);
+    }
+};
 
-    db.run(`CREATE TABLE IF NOT EXISTS match_history (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        data TEXT,
-        show_name TEXT,
-        match_json TEXT
-    )`);
-});
+initDB();
 
-module.exports = db;
+module.exports = pool;
