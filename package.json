@@ -13,6 +13,7 @@
   "type": "commonjs",
   "dependencies": {
     "express": "^5.2.1",
+    "openskill": "^5.0.1",
     "pg": "^8.22.0",
     "sqlite3": "^6.0.1"
   }
