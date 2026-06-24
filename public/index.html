@@ -10,64 +10,76 @@
 
     <div class="container mx-auto px-4 py-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
         
-        <div class="lg:col-span-2 bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-700">
-            <h2 class="text-2xl font-bold mb-6 text-indigo-400 flex items-center gap-2">
-                🎮 Inserisci Nuovo Match
-            </h2>
+        <div class="lg:col-span-2">
             
-            <form id="matchForm" onsubmit="inviaMatch(event)" class="space-y-6">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div id="loginBox" class="bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-700">
+                <h2 class="text-2xl font-bold mb-4 text-indigo-400">🔒 Accesso Amministratore</h2>
+                <p class="text-sm text-gray-400 mb-6">Inserisci le credenziali per sbloccare l'inserimento dei match di Chat Of Honor.</p>
+                <div class="space-y-4">
                     <div>
-                        <label class="block text-sm font-medium mb-1 text-gray-400">Nome dello Show</label>
-                        <input type="text" id="showName" required placeholder="es. Show #42 - La Vendetta" 
-                               class="w-full bg-gray-700 border border-gray-600 rounded p-2.5 text-white focus:outline-none focus:border-indigo-500">
+                        <label class="block text-sm text-gray-400 mb-1">Username Admin</label>
+                        <input type="text" id="adminUser" class="w-full bg-gray-700 border border-gray-600 rounded p-2.5 text-white focus:outline-none focus:border-indigo-500">
                     </div>
-                    <div class="flex items-center h-full pt-6">
-                        <label class="relative inline-flex items-center cursor-pointer">
-                            <input type="checkbox" id="isTitle" class="sr-only peer">
-                            <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
-                            <span class="ml-3 text-sm font-medium text-gray-300">👑 Incontro per il Titolo (Moltiplicatore 2x)</span>
-                        </label>
+                    <div>
+                        <label class="block text-sm text-gray-400 mb-1">Password</label>
+                        <input type="password" id="adminPass" class="w-full bg-gray-700 border border-gray-600 rounded p-2.5 text-white focus:outline-none focus:border-indigo-500">
                     </div>
+                    <button onclick="eseguiLogin()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2.5 rounded transition">
+                        Accedi
+                    </button>
                 </div>
+            </div>
 
-                <hr class="border-gray-700">
-
-                <div>
-                    <div class="flex justify-between items-center mb-4">
-                        <h3 class="text-lg font-semibold text-gray-300">Squadre / Partecipanti</h3>
-                        <button type="button" onclick="aggiungiSquadra()" 
-                                class="bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold py-2 px-4 rounded transition">
-                            + Aggiungi Squadra
-                        </button>
-                    </div>
-                    
-                    <div id="teamsContainer" class="space-y-4">
+            <div id="matchPannel" class="bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-700 hidden">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-2xl font-bold text-indigo-400 flex items-center gap-2">🎮 Inserisci Nuovo Match</h2>
+                    <button onclick="logout()" class="text-xs bg-red-600 hover:bg-red-500 text-white py-1 px-3 rounded">Logout</button>
+                </div>
+                
+                <form id="matchForm" onsubmit="inviaMatch(event)" class="space-y-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium mb-1 text-gray-400">Nome dello Show</label>
+                            <input type="text" id="showName" required placeholder="es. Show #42" class="w-full bg-gray-700 border border-gray-600 rounded p-2.5 text-white focus:outline-none focus:border-indigo-500">
                         </div>
-                </div>
+                        <div class="flex items-center h-full pt-6">
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="isTitle" class="sr-only peer">
+                                <div class="w-11 h-6 bg-gray-600 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
+                                <span class="ml-3 text-sm font-medium text-gray-300">👑 Incontro Titolato (2x)</span>
+                            </label>
+                        </div>
+                    </div>
 
-                <button type="submit" 
-                        class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 px-4 rounded-lg transition shadow-md">
-                    Registra Match e Aggiorna TrueSkill
-                </button>
-            </form>
+                    <hr class="border-gray-700">
+
+                    <div>
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-lg font-semibold text-gray-300">Squadre / Partecipanti</h3>
+                            <button type="button" onclick="aggiungiSquadra()" class="bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold py-1.5 px-3 rounded transition">+ Squadra</button>
+                        </div>
+                        <div id="teamsContainer" class="space-y-4"></div>
+                    </div>
+
+                    <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-lg transition shadow-md">
+                        Registra Match e Aggiorna TrueSkill
+                    </button>
+                </form>
+            </div>
         </div>
 
         <div class="bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-700 h-fit">
-            <h2 class="text-2xl font-bold mb-6 text-amber-400 flex items-center gap-2">
-                🏆 Classifica Roster (2026)
-            </h2>
+            <h2 class="text-2xl font-bold mb-6 text-amber-400 flex items-center gap-2">🏆 Classifica Roster (2026)</h2>
             <div class="overflow-x-auto">
                 <table class="w-full text-left border-collapse">
                     <thead>
                         <tr class="border-b border-gray-700 text-gray-400 text-sm">
-                            <th class="pb-3 font-medium">Pos</th>
-                            <th class="pb-3 font-medium">Quizzer</th>
-                            <th class="pb-3 font-medium text-right">ELO</th>
+                            <th class="pb-3">Pos</th>
+                            <th class="pb-3">Quizzer</th>
+                            <th class="pb-3 text-right">ELO</th>
                         </tr>
                     </thead>
-                    <tbody id="rosterTableBody" class="divide-y divide-gray-700/50 text-sm">
-                        </tbody>
+                    <tbody id="rosterTableBody" class="divide-y divide-gray-700/50 text-sm"></tbody>
                 </table>
             </div>
         </div>
@@ -78,22 +90,62 @@
 
     <script>
         let teamCounter = 0;
+        let tokenAdmin = localStorage.getItem('coh_token') || null;
 
         document.addEventListener("DOMContentLoaded", () => {
             caricaRoster();
-            aggiungiSquadra();
-            aggiungiSquadra();
+            controlloSchermata();
         });
+
+        function controlloSchermata() {
+            if (tokenAdmin) {
+                document.getElementById('loginBox').classList.add('hidden');
+                document.getElementById('matchPannel').classList.remove('hidden');
+                if(document.getElementById('teamsContainer').children.length === 0) {
+                    aggiungiSquadra();
+                    aggiungiSquadra();
+                }
+            } else {
+                document.getElementById('loginBox').classList.remove('hidden');
+                document.getElementById('matchPannel').classList.add('hidden');
+            }
+        }
+
+        async function eseguiLogin() {
+            const username = document.getElementById('adminUser').value;
+            const password = document.getElementById('adminPass').value;
+
+            try {
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    tokenAdmin = data.token;
+                    localStorage.setItem('coh_token', tokenAdmin);
+                    controlloSchermata();
+                } else {
+                    alert(data.error);
+                }
+            } catch (err) {
+                alert("Errore di connessione.");
+            }
+        }
+
+        function logout() {
+            tokenAdmin = null;
+            localStorage.removeItem('coh_token');
+            controlloSchermata();
+        }
 
         async function caricaRoster() {
             try {
                 const response = await fetch('/api/roster');
                 const quizzers = await response.json();
-                
                 const tbody = document.getElementById('rosterTableBody');
-                tbody.innerHTML = quizzers.length === 0 
-                    ? `<tr><td colspan="3" class="py-4 text-center text-gray-500">Nessun match disputato nel 2026</td></tr>`
-                    : '';
+                tbody.innerHTML = quizzers.length === 0 ? `<tr><td colspan="3" class="py-4 text-center text-gray-500">Nessun match disputato</td></tr>` : '';
                 
                 quizzers.forEach((q, index) => {
                     tbody.innerHTML += `
@@ -101,129 +153,82 @@
                             <td class="py-3 font-bold text-gray-400">${index + 1}°</td>
                             <td class="py-3 font-medium text-gray-200">${q.username}</td>
                             <td class="py-3 text-right font-mono font-bold text-indigo-400">${q.elo.toFixed(1)}</td>
-                        </tr>
-                    `;
+                        </tr>`;
                 });
-
-                const datalist = document.getElementById('quizzersList');
-                datalist.innerHTML = quizzers.map(q => `<option value="${q.username}"></option>`).join('');
-
-            } catch (err) {
-                console.error("Errore nel caricamento del roster:", err);
-            }
+                document.getElementById('quizzersList').innerHTML = quizzers.map(q => `<option value="${q.username}"></option>`).join('');
+            } catch (err) { console.error(err); }
         }
 
         function aggiungiSquadra() {
             teamCounter++;
             const container = document.getElementById('teamsContainer');
-            
             const teamHtml = `
-                <div id="team_${teamCounter}" class="bg-gray-750 p-4 rounded-lg border border-gray-700 relative bg-gray-900/40">
+                <div id="team_${teamCounter}" class="p-4 rounded-lg border border-gray-700 relative bg-gray-900/40">
                     <div class="flex flex-wrap items-center gap-4 mb-3">
-                        <span class="font-bold text-sm text-indigo-300 uppercase tracking-wider">Squadra #${teamCounter}</span>
-                        
+                        <span class="font-bold text-sm text-indigo-300">SQUADRA #${teamCounter}</span>
                         <div class="flex items-center gap-2">
                             <label class="text-xs text-gray-400">Posizione:</label>
-                            <input type="number" class="team-rank w-14 bg-gray-700 border border-gray-600 rounded p-1 text-center font-bold text-white" 
-                                   value="${container.children.length + 1}" min="1" required>
+                            <input type="number" class="team-rank w-14 bg-gray-700 border border-gray-600 rounded p-1 text-center font-bold text-white" value="${container.children.length + 1}" required>
                         </div>
-
                         <div class="flex items-center gap-2">
                             <label class="text-xs text-gray-400">Punteggio:</label>
-                            <input type="number" class="team-score w-16 bg-gray-700 border border-gray-600 rounded p-1 text-center font-bold text-amber-400" 
-                                   value="0" min="0" required>
+                            <input type="number" class="team-score w-16 bg-gray-700 border border-gray-600 rounded p-1 text-center font-bold text-amber-400" value="0" required>
                         </div>
-
-                        <button type="button" onclick="rimuoviElemento('team_${teamCounter}')" 
-                                class="text-xs text-red-400 hover:text-red-300 ml-auto">
-                            Elimina Squadra
-                        </button>
+                        <button type="button" onclick="rimuoviElemento('team_${teamCounter}')" class="text-xs text-red-400 hover:text-red-300 ml-auto">Elimina</button>
                     </div>
-
-                    <div class="players-container space-y-2 mb-3">
-                        </div>
-
-                    <button type="button" onclick="aggiungiGiocatore('team_${teamCounter}')" 
-                            class="text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 py-1.5 px-3 rounded transition">
-                        + Aggiungi Giocatore
-                    </button>
-                </div>
-            `;
+                    <div class="players-container space-y-2 mb-3"></div>
+                    <button type="button" onclick="aggiungiGiocatore('team_${teamCounter}')" class="text-xs bg-gray-700 text-gray-300 py-1 px-2 rounded">+ Giocatore</button>
+                </div>`;
             container.insertAdjacentHTML('beforeend', teamHtml);
             aggiungiGiocatore(`team_${teamCounter}`);
         }
 
         function aggiungiGiocatore(teamId) {
-            const teamDiv = document.getElementById(teamId);
-            const playersContainer = teamDiv.querySelector('.players-container');
-            const playerInputId = `player_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
-
-            const playerHtml = `
-                <div id="${playerInputId}" class="flex items-center gap-2">
-                    <input type="text" list="quizzersList" class="player-name w-full bg-gray-800 border border-gray-700 rounded p-2 text-sm text-white focus:outline-none focus:border-indigo-500" 
-                           placeholder="Nome del Quizzer" required>
-                    <button type="button" onclick="rimuoviElemento('${playerInputId}')" class="text-gray-500 hover:text-red-400 p-1 text-sm">
-                        ✕
-                    </button>
-                </div>
-            `;
-            playersContainer.insertAdjacentHTML('beforeend', playerHtml);
+            const playersContainer = document.getElementById(teamId).querySelector('.players-container');
+            const id = `p_${Date.now()}_${Math.random().toString(36).substr(2,4)}`;
+            playersContainer.insertAdjacentHTML('beforeend', `
+                <div id="${id}" class="flex items-center gap-2">
+                    <input type="text" list="quizzersList" class="player-name w-full bg-gray-800 border border-gray-700 rounded p-2 text-sm text-white" placeholder="Nome Quizzer" required>
+                    <button type="button" onclick="rimuoviElemento('${id}')" class="text-gray-500 hover:text-red-400 px-1">✕</button>
+                </div>`);
         }
 
-        function rimuoviElemento(id) {
-            document.getElementById(id)?.remove();
-        }
+        function rimuoviElemento(id) { document.getElementById(id)?.remove(); }
 
         async function inviaMatch(event) {
             event.preventDefault();
-
             const show_name = document.getElementById('showName').value;
             const is_title = document.getElementById('isTitle').checked;
-            const teamBlocks = document.querySelectorAll('#teamsContainer > div');
-            
             const teams = [];
 
-            teamBlocks.forEach(block => {
+            document.querySelectorAll('#teamsContainer > div').forEach(block => {
                 const rank = parseInt(block.querySelector('.team-rank').value);
-                const score = parseInt(block.querySelector('.team-score').value); // Estrae il punteggio
-                const playerInputs = block.querySelectorAll('.player-name');
-                const giocatori = Array.from(playerInputs).map(input => input.value.trim()).filter(v => v !== '');
-
-                if (giocatori.length > 0) {
-                    teams.push({ rank, score, giocatori }); // Invia anche lo score al server
-                }
+                const score = parseInt(block.querySelector('.team-score').value);
+                const giocatori = Array.from(block.querySelectorAll('.player-name')).map(i => i.value.trim()).filter(v => v !== '');
+                if (giocatori.length > 0) teams.push({ rank, score, giocatori });
             });
-
-            if (teams.length < 2) {
-                alert("Inserisci almeno 2 squadre per poter calcolare un match!");
-                return;
-            }
-
-            const payload = { show_name, is_title, teams };
 
             try {
                 const response = await fetch('/api/match', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${tokenAdmin}` // Invia il passaporto admin
+                    },
+                    body: JSON.stringify({ show_name, is_title, teams })
                 });
 
                 const result = await response.json();
-                
                 if (response.ok) {
                     alert(result.message);
                     document.getElementById('matchForm').reset();
                     document.getElementById('teamsContainer').innerHTML = '';
-                    aggiungiSquadra();
-                    aggiungiSquadra();
+                    controlloSchermata();
                     caricaRoster();
                 } else {
                     alert("Errore: " + result.error);
                 }
-            } catch (err) {
-                alert("Errore di connessione con il server.");
-                console.error(err);
-            }
+            } catch (err) { alert("Errore di rete."); }
         }
     </script>
 </body>
