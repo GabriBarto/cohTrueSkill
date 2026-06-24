@@ -79,21 +79,17 @@
     <script>
         let teamCounter = 0;
 
-        // Al caricamento della pagina, prendi i dati dal server
         document.addEventListener("DOMContentLoaded", () => {
             caricaRoster();
-            // Inizializza il form con due squadre vuote per comodità (es. per un 1v1 di base)
             aggiungiSquadra();
             aggiungiSquadra();
         });
 
-        // Funzione per caricare la classifica e popolare l'autocompletamento
         async function caricaRoster() {
             try {
                 const response = await fetch('/api/roster');
                 const quizzers = await response.json();
                 
-                // 1. Aggiorna la Tabella Classifica
                 const tbody = document.getElementById('rosterTableBody');
                 tbody.innerHTML = quizzers.length === 0 
                     ? `<tr><td colspan="3" class="py-4 text-center text-gray-500">Nessun match disputato nel 2026</td></tr>`
@@ -109,7 +105,6 @@
                     `;
                 });
 
-                // 2. Aggiorna il Datalist Autocomplete
                 const datalist = document.getElementById('quizzersList');
                 datalist.innerHTML = quizzers.map(q => `<option value="${q.username}"></option>`).join('');
 
@@ -118,7 +113,6 @@
             }
         }
 
-        // Aggiunge un blocco Squadra/Team nel form
         function aggiungiSquadra() {
             teamCounter++;
             const container = document.getElementById('teamsContainer');
@@ -129,9 +123,15 @@
                         <span class="font-bold text-sm text-indigo-300 uppercase tracking-wider">Squadra #${teamCounter}</span>
                         
                         <div class="flex items-center gap-2">
-                            <label class="text-xs text-gray-400">Posizione Finale:</label>
-                            <input type="number" class="team-rank w-16 bg-gray-700 border border-gray-600 rounded p-1 text-center font-bold text-white" 
+                            <label class="text-xs text-gray-400">Posizione:</label>
+                            <input type="number" class="team-rank w-14 bg-gray-700 border border-gray-600 rounded p-1 text-center font-bold text-white" 
                                    value="${container.children.length + 1}" min="1" required>
+                        </div>
+
+                        <div class="flex items-center gap-2">
+                            <label class="text-xs text-gray-400">Punteggio:</label>
+                            <input type="number" class="team-score w-16 bg-gray-700 border border-gray-600 rounded p-1 text-center font-bold text-amber-400" 
+                                   value="0" min="0" required>
                         </div>
 
                         <button type="button" onclick="rimuoviElemento('team_${teamCounter}')" 
@@ -144,17 +144,15 @@
                         </div>
 
                     <button type="button" onclick="aggiungiGiocatore('team_${teamCounter}')" 
-                            class="text-xs bg-gray-700 hover:bg-gray-600 text-gray-250 py-1.5 px-3 rounded transition">
-                        + Aggiungi Giocatore a questa squadra
+                            class="text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 py-1.5 px-3 rounded transition">
+                        + Aggiungi Giocatore
                     </button>
                 </div>
             `;
             container.insertAdjacentHTML('beforeend', teamHtml);
-            // Forza l'aggiunta di almeno un giocatore iniziale nella nuova squadra
             aggiungiGiocatore(`team_${teamCounter}`);
         }
 
-        // Aggiunge un campo di testo per il nome del giocatore all'interno di una squadra
         function aggiungiGiocatore(teamId) {
             const teamDiv = document.getElementById(teamId);
             const playersContainer = teamDiv.querySelector('.players-container');
@@ -176,7 +174,6 @@
             document.getElementById(id)?.remove();
         }
 
-        // Raccoglie i dati del form, genera il JSON corretto e lo invia al backend Express
         async function inviaMatch(event) {
             event.preventDefault();
 
@@ -188,11 +185,12 @@
 
             teamBlocks.forEach(block => {
                 const rank = parseInt(block.querySelector('.team-rank').value);
+                const score = parseInt(block.querySelector('.team-score').value); // Estrae il punteggio
                 const playerInputs = block.querySelectorAll('.player-name');
                 const giocatori = Array.from(playerInputs).map(input => input.value.trim()).filter(v => v !== '');
 
                 if (giocatori.length > 0) {
-                    teams.push({ rank, giocatori });
+                    teams.push({ rank, score, giocatori }); // Invia anche lo score al server
                 }
             });
 
@@ -216,10 +214,8 @@
                     alert(result.message);
                     document.getElementById('matchForm').reset();
                     document.getElementById('teamsContainer').innerHTML = '';
-                    // Ripristina lo stato iniziale pulito
                     aggiungiSquadra();
                     aggiungiSquadra();
-                    // Ricarica la classifica aggiornata
                     caricaRoster();
                 } else {
                     alert("Errore: " + result.error);
