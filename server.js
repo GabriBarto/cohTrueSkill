@@ -9,13 +9,15 @@ app.use(express.static('public'));
 // Credenziali Admin Hardcoded (Sicure lato server)
 const ADMIN_USER = 'cohadmin';
 const ADMIN_PASS = 'COH2026';
-// Token temporaneo generato all'avvio del server per validare le richieste
+// Token temporaneo generato all'avvio del server per validare le richieste di inserimento
 const ADMIN_TOKEN = 'SECRET_TOKEN_COH_2026_' + Math.random().toString(36).substring(2);
 
 // API per il Login dell'Admin
 app.post('/api/login', (req, res) => {
     const { username, password } = req.body;
-    if (username === ADMIN_USER && password === ADMIN_PASS) {
+
+    // .toLowerCase() e .trim() prevengono errori di battitura (es. maiuscole automatiche da smartphone)
+    if (username && password && username.toLowerCase().trim() === ADMIN_USER && password.trim() === ADMIN_PASS) {
         return res.json({ success: true, token: ADMIN_TOKEN });
     }
     res.status(401).json({ success: false, error: "Credenziali errate!" });
@@ -30,6 +32,17 @@ app.get('/api/roster', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+
+// Recupera giocatore o assegna i valori di default per partire da 900 Elo
+// Formula standard: Elo = mu - 3 * sigma -> 925.0 - (3 * 8.333) = ~900
+const getPlayerFromDB = async (username) => {
+    const result = await pool.query('SELECT mu, sigma FROM quizzers WHERE username = $1', [username]);
+    if (result.rows.length > 0) {
+        return result.rows[0];
+    } else {
+        return { mu: 925.0, sigma: 8.333 };
+    }
+};
 
 // API per inserire un Match (PROTETTA)
 app.post('/api/match', async (req, res) => {
@@ -47,35 +60,38 @@ app.post('/api/match', async (req, res) => {
         const ranksFormattoOpenskill = [];
         const vecchiValoriMu = {};
 
-        // Funzione helper locale per recuperare i player
-        const getPlayerFromDB = async (username) => {
-            const result = await pool.query('SELECT mu, sigma FROM quizzers WHERE username = $1', [username]);
-            if (result.rows.length > 0) return result.rows[0];
-            const d = rating();
-            return { mu: d.mu, sigma: d.sigma };
-        };
-
+        // 1. Mappiamo le squadre nel formato accettato dall'algoritmo locale
         for (const team of teams) {
             const giocatoriDelTeam = [];
             for (const nome of team.giocatori) {
                 const dbPlayer = await getPlayerFromDB(nome);
                 vecchiValoriMu[nome] = dbPlayer.mu;
+
+                // Crea l'oggetto rating per la libreria openskill
                 giocatoriDelTeam.push(rating({ mu: dbPlayer.mu, sigma: dbPlayer.sigma }));
             }
             teamsFormattoOpenskill.push(giocatoriDelTeam);
-            ranksFormattoOpenskill.push(team.rank);
+            ranksFormattoOpenskill.push(team.rank); // Inserisce la posizione (1°, 2°, ecc)
         }
 
+        // 2. Eseguiamo il calcolo matematico LOCALE (Zero chiamate esterne, istantaneo)
         const updatedTeams = rate(teamsFormattoOpenskill, { ranks: ranksFormattoOpenskill });
 
+        // 3. Applichiamo il moltiplicatore sul Delta e aggiorniamo il database su Neon
         for (let tIndex = 0; tIndex < updatedTeams.length; tIndex++) {
             const team = updatedTeams[tIndex];
             for (let pIndex = 0; pIndex < team.length; pIndex++) {
                 const giocatoreCalcolato = team[pIndex];
+
+                // Recuperiamo il nome originale usando gli indici della struttura iniziale
                 const nome = teams[tIndex].giocatori[pIndex];
                 const muIniziale = vecchiValoriMu[nome];
+
+                // Calcolo del Delta (Nuovo MU - Vecchio MU) amplificato se c'è il titolo in palio
                 const deltaMu = giocatoreCalcolato.mu - muIniziale;
                 const muFinale = muIniziale + (deltaMu * moltiplicatore);
+
+                // Formula standard per l'Elo visualizzato nel tabellone
                 const eloFinale = muFinale - 3 * giocatoreCalcolato.sigma;
 
                 await pool.query(`
@@ -88,11 +104,13 @@ app.post('/api/match', async (req, res) => {
             }
         }
 
+        // Salviamo l'intero match (compreso di punteggi/scores) nella cronologia storica
         await pool.query(`INSERT INTO match_history (show_name, match_json) VALUES ($1, $2)`, [show_name, JSON.stringify(req.body)]);
-        res.json({ status: "success", message: "Match calcolato localmente! Roster aggiornato." });
+
+        res.json({ status: "success", message: "Match calcolato localmente! Roster aggiornato con successo." });
 
     } catch (error) {
-        console.error(error);
+        console.error("Errore nel calcolo del match:", error);
         res.status(500).json({ error: "Errore durante il calcolo interno delle classifiche." });
     }
 });
