@@ -39,7 +39,7 @@ const getPlayerFromDB = async (username) => {
     if (result.rows.length > 0) {
         return result.rows[0];
     } else {
-        // Valori di partenza ideali per i nuovi iscritti
+        // Nuovo giocatore: parte da 900 Elo, quindi mu = 925.0 e sigma = 8.333
         return { mu: 925.0, sigma: 8.333 };
     }
 };
@@ -86,15 +86,28 @@ app.post('/api/match', async (req, res) => {
                 const nome = teams[tIndex].giocatori[pIndex];
                 const muIniziale = vecchiValoriMu[nome];
 
-                // Calcoliamo di quanto l'algoritmo ha fatto variare il MU (il guadagno o la perdita pura)
+                // Guadagno/perdita base dell'algoritmo
                 const deltaMu = giocatoreCalcolato.mu - muIniziale;
 
-                // Applichiamo il moltiplicatore se c'è il titolo (es. guadagno/perdita doppia)
-                const variazioneEffettiva = deltaMu * moltiplicatore;
-                const muFinale = muIniziale + variazioneEffettiva;
+                // Convertiamo la variazione di openskill in punti Elo reali (scala aumentata a 20x per più dinamismo)
+                let puntiEloAssegnati = deltaMu * 20;
 
-                // FATTORE DI SCALA: Convertiamo la variazione infinitesimale di openskill in punti Elo reali (scala 15x)
-                const puntiEloAssegnati = variazioneEffettiva * 15;
+                // FIX LOGICA MATCH TITOLATI: Forziamo uno spostamento minimo se c'è una cintura in palio
+                if (is_title) {
+                    puntiEloAssegnati = puntiEloAssegnati * moltiplicatore; // Raddoppia l'efficacia (2x)
+
+                    // Se vince il match titolato ma l'algoritmo dà pochi centesimi, garantiamo +15 punti minimi
+                    if (puntiEloAssegnati > 0 && puntiEloAssegnati < 15) {
+                        puntiEloAssegnati = 15.0;
+                    }
+                    // Se perde un match titolato, subisce un crollo minimo di -20 punti
+                    if (puntiEloAssegnati < 0 && puntiEloAssegnati > -20) {
+                        puntiEloAssegnati = -20.0;
+                    }
+                }
+
+                // Il MU finale segue l'andamento reale dell'algoritmo openskill
+                const muFinale = muIniziale + deltaMu;
 
                 // Query avanzata: Se l'utente esiste prende il vecchio ELO e somma il delta. 
                 // Se non esiste (nuovo utente), parte da 900.0 e applica la variazione del primo match.
