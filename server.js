@@ -33,13 +33,13 @@ app.get('/api/roster', async (req, res) => {
     }
 });
 
-// Recupera giocatore o assegna i valori di default per partire da 900 Elo
-// Formula standard: Elo = mu - 3 * sigma -> 925.0 - (3 * 8.333) = ~900
+// Recupera giocatore o assegna i valori di default per partire da 900 Elo strutturale
 const getPlayerFromDB = async (username) => {
     const result = await pool.query('SELECT mu, sigma FROM quizzers WHERE username = $1', [username]);
     if (result.rows.length > 0) {
         return result.rows[0];
     } else {
+        // Valori di partenza ideali per i nuovi iscritti
         return { mu: 925.0, sigma: 8.333 };
     }
 };
@@ -77,29 +77,35 @@ app.post('/api/match', async (req, res) => {
         // 2. Eseguiamo il calcolo matematico LOCALE (Zero chiamate esterne, istantaneo)
         const updatedTeams = rate(teamsFormattoOpenskill, { ranks: ranksFormattoOpenskill });
 
-        // 3. Applichiamo il moltiplicatore sul Delta e aggiorniamo il database su Neon
+        // 3. Applichiamo le variazioni e aggiorniamo il database su Neon senza distruggere lo storico dell'Elo passato
         for (let tIndex = 0; tIndex < updatedTeams.length; tIndex++) {
             const team = updatedTeams[tIndex];
             for (let pIndex = 0; pIndex < team.length; pIndex++) {
                 const giocatoreCalcolato = team[pIndex];
 
-                // Recuperiamo il nome originale usando gli indici della struttura iniziale
                 const nome = teams[tIndex].giocatori[pIndex];
                 const muIniziale = vecchiValoriMu[nome];
 
-                // Calcolo del Delta (Nuovo MU - Vecchio MU) amplificato se c'è il titolo in palio
+                // Calcoliamo di quanto l'algoritmo ha fatto variare il MU (il guadagno o la perdita pura)
                 const deltaMu = giocatoreCalcolato.mu - muIniziale;
-                const muFinale = muIniziale + (deltaMu * moltiplicatore);
 
-                // Formula standard per l'Elo visualizzato nel tabellone
-                const eloFinale = muFinale - 3 * giocatoreCalcolato.sigma;
+                // Applichiamo il moltiplicatore se c'è il titolo (es. guadagno/perdita doppia)
+                const variazioneEffettiva = deltaMu * moltiplicatore;
+                const muFinale = muIniziale + variazioneEffettiva;
 
+                // FATTORE DI SCALA: Convertiamo la variazione infinitesimale di openskill in punti Elo reali (scala 15x)
+                const puntiEloAssegnati = variazioneEffettiva * 15;
+
+                // Query avanzata: Se l'utente esiste prende il vecchio ELO e somma il delta. 
+                // Se non esiste (nuovo utente), parte da 900.0 e applica la variazione del primo match.
                 await pool.query(`
                     INSERT INTO quizzers (username, mu, sigma, elo) 
-                    VALUES ($1, $2, $3, $4)
+                    VALUES ($1, $2, $3, 900.0 + $4)
                     ON CONFLICT(username) DO UPDATE SET 
-                    mu = EXCLUDED.mu, sigma = EXCLUDED.sigma, elo = EXCLUDED.elo`,
-                    [nome, muFinale, giocatoreCalcolato.sigma, eloFinale]
+                    mu = EXCLUDED.mu, 
+                    sigma = EXCLUDED.sigma, 
+                    elo = quizzers.elo + $4`,
+                    [nome, muFinale, giocatoreCalcolato.sigma, puntiEloAssegnati]
                 );
             }
         }
