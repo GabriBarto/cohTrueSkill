@@ -39,8 +39,8 @@ const getPlayerFromDB = async (username) => {
     if (result.rows.length > 0) {
         return result.rows[0];
     } else {
-        // Nuovo giocatore: parte da 1200 Elo, quindi mu = 1225.0 e sigma = 8.333
-        return { mu: 1225.0, sigma: 4.66 };
+        // Nuovo giocatore: parte da 1200 Elo, quindi mu = 1225.0 e sigma = 4.0
+        return { mu: 1225.0, sigma: 4.0 };
     }
 };
 
@@ -74,12 +74,19 @@ app.post('/api/match', async (req, res) => {
             ranksFormattoOpenskill.push(team.rank); // Inserisce la posizione (1°, 2°, ecc)
         }
 
-        // 2. Eseguiamo il calcolo matematico LOCALE (Zero chiamate esterne, istantaneo)
+        // 2. Eseguiamo il calcolo matematico LOCALE
         const updatedTeams = rate(teamsFormattoOpenskill, { ranks: ranksFormattoOpenskill });
+
+        // CONTROLLO PAREGGI: Creiamo una mappa per sapere se una determinata posizione (rank) è condivisa
+        const conteggioRank = {};
+        ranksFormattoOpenskill.forEach(r => conteggioRank[r] = (conteggioRank[r] || 0) + 1);
 
         // 3. Applichiamo le variazioni e aggiorniamo il database su Neon senza distruggere lo storico dell'Elo passato
         for (let tIndex = 0; tIndex < updatedTeams.length; tIndex++) {
             const team = updatedTeams[tIndex];
+            const rankAttuale = teams[tIndex].rank;
+            const isPareggio = conteggioRank[rankAttuale] > 1; // True se più team hanno questo rank
+
             for (let pIndex = 0; pIndex < team.length; pIndex++) {
                 const giocatoreCalcolato = team[pIndex];
 
@@ -89,8 +96,13 @@ app.post('/api/match', async (req, res) => {
                 // Guadagno/perdita base dell'algoritmo
                 const deltaMu = giocatoreCalcolato.mu - muIniziale;
 
-                // Convertiamo la variazione di openskill in punti Elo reali (scala aumentata a 20x per più dinamismo)
+                // Convertiamo la variazione di openskill in punti Elo reali (scala a 20x per buon dinamismo)
                 let puntiEloAssegnati = deltaMu * 20;
+
+                // PATCH PAREGGIO: Se hanno lo stesso rank, blocchiamo le perdite ingiuste forzandole a 0
+                if (isPareggio && puntiEloAssegnati < 0) {
+                    puntiEloAssegnati = 0.0;
+                }
 
                 // FIX LOGICA MATCH TITOLATI: Forziamo uno spostamento minimo se c'è una cintura in palio
                 if (is_title) {
