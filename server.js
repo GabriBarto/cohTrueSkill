@@ -33,14 +33,14 @@ app.get('/api/roster', async (req, res) => {
     }
 });
 
-// Recupera giocatore o assegna i valori di default per partire da 900 Elo strutturale
+// Recupera giocatore o assegna i valori di default per partire da 1200 Elo strutturale
 const getPlayerFromDB = async (username) => {
     const result = await pool.query('SELECT mu, sigma FROM quizzers WHERE username = $1', [username]);
     if (result.rows.length > 0) {
         return result.rows[0];
     } else {
-        // Nuovo giocatore: parte da 900 Elo, quindi mu = 925.0 e sigma = 8.333
-        return { mu: 925.0, sigma: 8.333 };
+        // Nuovo giocatore: parte da 1200 Elo, quindi mu = 1225.0 e sigma = 8.333
+        return { mu: 1225.0, sigma: 4.66 };
     }
 };
 
@@ -110,10 +110,10 @@ app.post('/api/match', async (req, res) => {
                 const muFinale = muIniziale + deltaMu;
 
                 // Query avanzata: Se l'utente esiste prende il vecchio ELO e somma il delta. 
-                // Se non esiste (nuovo utente), parte da 900.0 e applica la variazione del primo match.
+                // Se non esiste (nuovo utente), parte da 1200.0 e applica la variazione del primo match.
                 await pool.query(`
                     INSERT INTO quizzers (username, mu, sigma, elo) 
-                    VALUES ($1, $2, $3, 900.0 + $4)
+                    VALUES ($1, $2, $3, 1200.0 + $4)
                     ON CONFLICT(username) DO UPDATE SET 
                     mu = EXCLUDED.mu, 
                     sigma = EXCLUDED.sigma, 
