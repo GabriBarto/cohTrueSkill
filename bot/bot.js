@@ -62,7 +62,7 @@ bot.command('elo', async (ctx) => {
     }
 });
 
-// 6. Comando /record Username (Logica JavaScript a tolleranza elevata)
+// 6. Comando /record Username (Risolto per colonne TEXT/JSON)
 bot.command('record', async (ctx) => {
     const msgText = ctx.message.text.trim();
     const args = msgText.split(/\s+/);
@@ -71,7 +71,7 @@ bot.command('record', async (ctx) => {
     const usernameCercato = args.slice(1).join(' ').trim().toLowerCase();
 
     try {
-        // 1. Verifica esistenza giocatore nel Roster per recuperare il Nickname ufficiale
+        // 1. Verifica esistenza giocatore nel Roster
         const checkUser = await pool.query('SELECT username FROM quizzers WHERE username ILIKE $1', [usernameCercato]);
         if (checkUser.rows.length === 0) {
             return ctx.reply(`❌ Il giocatore "<b>${args.slice(1).join(' ')}</b>" non è presente nel database.`, { parse_mode: 'HTML' });
@@ -79,44 +79,49 @@ bot.command('record', async (ctx) => {
 
         const nomeUfficiale = checkUser.rows[0].username;
 
-        // 2. Scarica la cronologia dei match completi dal database
+        // 2. Scarichiamo tutti i match dalla tabella
         const matchRes = await pool.query('SELECT match_json FROM match_history');
 
         let wins = 0;
         let draws = 0;
         let losses = 0;
 
-        // 3. Elaborazione iterativa dei match via Node.js
+        // 3. Analisi iterativa dei match
         for (const row of matchRes.rows) {
-            const match = row.match_json;
+            let match = row.match_json;
+
+            // Poiché la colonna nel DB è di tipo TEXT, forziamo la stringa a diventare un oggetto JSON leggibile
+            if (typeof match === 'string') {
+                try {
+                    match = JSON.parse(match);
+                } catch (e) {
+                    console.error("Errore nel parsing del testo match_json:", e);
+                    continue;
+                }
+            }
+
             if (!match || !match.teams || !Array.isArray(match.teams)) continue;
 
-            // Cerca se l'utente richiesto fa parte di uno dei team partecipanti al match
-            const teamDelGiocatore = match.teams.find(t => {
-                // Gestione difensiva: controlla se l'array giocatori esiste ed è valido
-                const listaGiocatori = t.giocatori || t.Giocatori || t.giocatore || [];
-                return Array.isArray(listaGiocItems = listaGiocatori) && listaGiocatori.some(g =>
-                    typeof g === 'string' && g.trim().toLowerCase() === usernameCercato
-                );
-            });
+            // Cerchiamo il team all'interno del quale ha giocato il quizzer cercato
+            const teamDelGiocatore = match.teams.find(t =>
+                t.giocatori && Array.isArray(t.giocatori) && t.giocatori.some(g =>
+                    g && g.toString().trim().toLowerCase() === usernameCercato
+                )
+            );
 
-            // Se l'utente ha giocato questo match, calcola l'esito basandoti sul rank
+            // Se il giocatore ha partecipato a questo specifico match
             if (teamDelGiocatore) {
-                // Estrae in sicurezza il rank convertendolo in intero
-                const rankCorrente = parseInt(teamDelGiocatore.rank || teamDelGiocatore.Rank || 0);
+                const rankDelGiocatore = parseInt(teamDelGiocatore.rank);
 
-                // Conta quanti team hanno totalizzato lo stesso posizionamento nel match corrente
-                const teamConStessoRank = match.teams.filter(t => {
-                    const r = parseInt(t.rank || t.Rank || 0);
-                    return r === rankCorrente;
-                }).length;
+                // Contiamo quanti team hanno fatto lo stesso identico rank in questo match
+                const teamConStessoRank = match.teams.filter(t => parseInt(t.rank) === rankDelGiocatore).length;
 
                 if (teamConStessoRank > 1) {
-                    draws++; // Presenza di pareggio strutturale
-                } else if (rankCorrente === 1) {
+                    draws++; // Se più di un team condivide lo stesso rank, si tratta di un pareggio
+                } else if (rankDelGiocatore === 1) {
                     wins++;  // Primo posto in solitaria = Vittoria
                 } else {
-                    losses++; // Posizionamento inferiore senza pareggi = Sconfitta
+                    losses++; // Posizionamento in solitaria peggiore del primo = Sconfitta
                 }
             }
         }
@@ -135,13 +140,13 @@ bot.command('record', async (ctx) => {
 
     } catch (err) {
         console.error("Errore nel calcolo del record:", err);
-        ctx.reply("🤖 <b>Errore interno:</b> Impossibile elaborare i dati storici in questo momento.", { parse_mode: 'HTML' });
+        ctx.reply("🤖 <b>Errore interno:</b> Impossibile elaborare i dati storici.", { parse_mode: 'HTML' });
     }
 });
 
 // 7. Avvio ufficiale del Bot in polling costante
 bot.launch()
-    .then(() => console.log('🤖 Bot Telegram Online con calcolo JS integrato!'))
+    .then(() => console.log('🤖 Bot Telegram Online e configurato con fix TEXT!'))
     .catch((err) => console.error('Errore critico durante il lancio del Bot:', err));
 
 // Gestione dello spegnimento pulito su Render
