@@ -74,7 +74,7 @@ bot.command('elo', async (ctx) => {
     }
 });
 
-// 6. Comando /record Username - Mostra solo le statistiche W-D-L
+// 6. Comando /record Username - Mostra solo le statistiche W-D-L (QUERY CORRETTA)
 bot.command('record', async (ctx) => {
     const msgText = ctx.message.text.trim();
     const args = msgText.split(/\s+/);
@@ -86,41 +86,42 @@ bot.command('record', async (ctx) => {
     const usernameCercato = args.slice(1).join(' ').trim();
 
     try {
-        // Query avanzata per estrarre e conteggiare i match dal JSON in match_history
+        // Query corretta: Calcola i rank e i pareggi senza conflitti di id
         const queryText = `
             WITH match_flat AS (
                 SELECT 
                     m.id AS match_id,
-                    jsonb_array_elements(m.match_json->'teams') AS team_data
+                    (jsonb_array_elements(m.match_json->'teams')->>'rank')::int AS team_rank,
+                    jsonb_array_elements_text(jsonb_array_elements(m.match_json->'teams')->'giocatori') AS player_name
                 FROM match_history m
             ),
-            player_matches AS (
+            match_ties AS (
                 SELECT 
                     match_id,
-                    (team_data->>'rank')::int AS p_rank,
-                    jsonb_array_elements_text(team_data->'giocatori') AS player_name
+                    team_rank,
+                    COUNT(*) AS teams_at_rank
                 FROM match_flat
+                GROUP BY match_id, team_rank
             ),
-            match_counts AS (
+            calculated_matches AS (
                 SELECT 
-                    r.match_id,
-                    r.rank AS r_rank,
-                    COUNT(*) AS r_count
-                FROM (
-                    SELECT match_id, (team_data->>'rank')::int AS rank 
-                    FROM match_flat
-                ) r
-                GROUP BY match_id, r.rank
+                    f.player_name,
+                    CASE 
+                        WHEN f.team_rank = 1 AND t.teams_at_rank = 1 THEN 'win'
+                        WHEN t.teams_at_rank > 1 THEN 'draw'
+                        ELSE 'loss'
+                    END AS outcome
+                FROM match_flat f
+                JOIN match_ties t ON f.match_id = t.match_id AND f.team_rank = t.team_rank
             ),
             stats AS (
                 SELECT 
-                    pm.player_name,
-                    COUNT(CASE WHEN pm.p_rank = 1 AND mc.r_count = 1 THEN 1 END) AS wins,
-                    COUNT(CASE WHEN mc.r_count > 1 THEN 1 END) AS draws,
-                    COUNT(CASE WHEN pm.p_rank > 1 AND mc.r_count = 1 THEN 1 END) AS losses
-                FROM player_matches pm
-                JOIN match_counts mc ON pm.match_id = mc.match_id AND pm.p_rank = mc.r_rank
-                GROUP BY pm.player_name
+                    player_name,
+                    COUNT(CASE WHEN outcome = 'win' THEN 1 END) AS wins,
+                    COUNT(CASE WHEN outcome = 'draw' THEN 1 END) AS draws,
+                    COUNT(CASE WHEN outcome = 'loss' THEN 1 END) AS losses
+                FROM calculated_matches
+                GROUP BY player_name
             )
             SELECT 
                 q.username, 
@@ -151,8 +152,8 @@ bot.command('record', async (ctx) => {
             ctx.reply(`❌ Il giocatore "<b>${usernameCercato}</b>" non è stato trovato nel database del Roster.`, { parse_mode: 'HTML' });
         }
     } catch (err) {
-        console.error("Errore durante la query delle statistiche:", err);
-        ctx.reply("🤖 <b>Errore interno:</b> Impossibile elaborare il record del giocatore.", { parse_mode: 'HTML' });
+        console.error("Errore SQL dettagliato:", err);
+        ctx.reply("🤖 <b>Errore interno:</b> Impossibile elaborare il record del giocatore a causa di un problema nel database.", { parse_mode: 'HTML' });
     }
 });
 
