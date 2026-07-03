@@ -74,7 +74,7 @@ bot.command('elo', async (ctx) => {
     }
 });
 
-// 6. Comando /record Username - Mostra solo le statistiche W-D-L (QUERY DEFINITIVA)
+// 6. Comando /record Username - Mostra le statistiche W-D-L (QUERY ULTRA-OTTIMIZZATA)
 bot.command('record', async (ctx) => {
     const msgText = ctx.message.text.trim();
     const args = msgText.split(/\s+/);
@@ -86,43 +86,40 @@ bot.command('record', async (ctx) => {
     const usernameCercato = args.slice(1).join(' ').trim();
 
     try {
-        // Query blindata: estrae in modo sequenziale l'array dei team e l'array dei giocatori evitando duplicazioni
+        // Query pulita: usa jsonb_to_recordset per spacchettare in modo nativo la struttura del match_json
         const queryText = `
             WITH match_teams AS (
                 SELECT 
                     m.id AS match_id,
-                    (team.value->>'rank')::int AS team_rank,
-                    team.value->'giocatori' AS giocatori_array
+                    t.rank::int AS team_rank,
+                    giocatore AS player_name
                 FROM match_history m,
-                LATERAL jsonb_array_elements(m.match_json->'teams') AS team
-            ),
-            match_flat AS (
-                SELECT 
-                    mt.match_id,
-                    mt.team_rank,
-                    giocatore.value::text AS player_name_raw,
-                    REPLACE(giocatore.value::text, '"', '') AS player_name
-                FROM match_teams mt,
-                LATERAL jsonb_array_elements_text(mt.giocatori_array) AS giocatore
+                LATERAL jsonb_to_recordset(m.match_json->'teams') AS t(rank text, giocatori jsonb),
+                LATERAL jsonb_array_elements_text(t.giocatori) AS giocatore
             ),
             match_ties AS (
                 SELECT 
                     match_id,
                     team_rank,
                     COUNT(*) AS teams_at_rank
-                FROM match_teams
+                FROM (
+                    SELECT DISTINCT match_id, team_rank, jugadores_group 
+                    FROM match_history m, 
+                    LATERAL jsonb_to_recordset(m.match_json->'teams') AS t(rank text, giocatori jsonb),
+                    LATERAL jsonb_array_elements_text(t.giocatori) AS jugadores_group
+                ) dist
                 GROUP BY match_id, team_rank
             ),
             calculated_matches AS (
                 SELECT 
                     f.player_name,
                     CASE 
-                        WHEN f.team_rank = 1 AND t.teams_at_rank = 1 THEN 'win'
-                        WHEN t.teams_at_rank > 1 THEN 'draw'
+                        WHEN f.team_rank = 1 AND COALESCE(t.teams_at_rank, 1) = 1 THEN 'win'
+                        WHEN COALESCE(t.teams_at_rank, 1) > 1 THEN 'draw'
                         ELSE 'loss'
                     END AS outcome
-                FROM match_flat f
-                JOIN match_ties t ON f.match_id = t.match_id AND f.team_rank = t.team_rank
+                FROM match_teams f
+                LEFT JOIN match_ties t ON f.match_id = t.match_id AND f.team_rank = t.team_rank
             ),
             stats AS (
                 SELECT 
@@ -162,7 +159,7 @@ bot.command('record', async (ctx) => {
             ctx.reply(`❌ Il giocatore "<b>${usernameCercato}</b>" non è stato trovato nel database del Roster.`, { parse_mode: 'HTML' });
         }
     } catch (err) {
-        console.error("Errore SQL dettagliato:", err);
+        console.error("Errore SQL Dettagliato:", err.message);
         ctx.reply("🤖 <b>Errore interno:</b> Errore nell'elaborazione dei dati storici.", { parse_mode: 'HTML' });
     }
 });
