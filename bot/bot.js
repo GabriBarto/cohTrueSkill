@@ -74,7 +74,7 @@ bot.command('elo', async (ctx) => {
     }
 });
 
-// 6. Comando /record Username - Mostra solo le statistiche W-D-L (QUERY CORRETTA)
+// 6. Comando /record Username - Mostra solo le statistiche W-D-L (QUERY DEFINITIVA)
 bot.command('record', async (ctx) => {
     const msgText = ctx.message.text.trim();
     const args = msgText.split(/\s+/);
@@ -86,21 +86,31 @@ bot.command('record', async (ctx) => {
     const usernameCercato = args.slice(1).join(' ').trim();
 
     try {
-        // Query corretta: Calcola i rank e i pareggi senza conflitti di id
+        // Query blindata: estrae in modo sequenziale l'array dei team e l'array dei giocatori evitando duplicazioni
         const queryText = `
-            WITH match_flat AS (
+            WITH match_teams AS (
                 SELECT 
                     m.id AS match_id,
-                    (jsonb_array_elements(m.match_json->'teams')->>'rank')::int AS team_rank,
-                    jsonb_array_elements_text(jsonb_array_elements(m.match_json->'teams')->'giocatori') AS player_name
-                FROM match_history m
+                    (team.value->>'rank')::int AS team_rank,
+                    team.value->'giocatori' AS giocatori_array
+                FROM match_history m,
+                LATERAL jsonb_array_elements(m.match_json->'teams') AS team
+            ),
+            match_flat AS (
+                SELECT 
+                    mt.match_id,
+                    mt.team_rank,
+                    giocatore.value::text AS player_name_raw,
+                    REPLACE(giocatore.value::text, '"', '') AS player_name
+                FROM match_teams mt,
+                LATERAL jsonb_array_elements_text(mt.giocatori_array) AS giocatore
             ),
             match_ties AS (
                 SELECT 
                     match_id,
                     team_rank,
                     COUNT(*) AS teams_at_rank
-                FROM match_flat
+                FROM match_teams
                 GROUP BY match_id, team_rank
             ),
             calculated_matches AS (
@@ -153,7 +163,7 @@ bot.command('record', async (ctx) => {
         }
     } catch (err) {
         console.error("Errore SQL dettagliato:", err);
-        ctx.reply("🤖 <b>Errore interno:</b> Impossibile elaborare il record del giocatore a causa di un problema nel database.", { parse_mode: 'HTML' });
+        ctx.reply("🤖 <b>Errore interno:</b> Errore nell'elaborazione dei dati storici.", { parse_mode: 'HTML' });
     }
 });
 
