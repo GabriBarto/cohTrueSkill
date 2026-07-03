@@ -1,74 +1,87 @@
 const { Telegraf } = require('telegraf');
 const { Pool } = require('pg');
+const express = require('express');
 require('dotenv').config();
 
-// Controllo delle variabili d'ambiente
+// Controllo delle variabili d'ambiente fondamentali
 if (!process.env.TELEGRAM_BOT_TOKEN || !process.env.DATABASE_URL) {
-    console.error("Errore: Mancano le variabili d'ambiente TELEGRAM_BOT_TOKEN o DATABASE_URL nel file .env");
+    console.error("Errore: Mancano le variabili d'ambiente TELEGRAM_BOT_TOKEN o DATABASE_URL.");
     process.exit(1);
 }
 
-// Inizializzazione del Bot e del Database
+// 1. Inizializzazione del Bot Telegram
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
+
+// 2. Inizializzazione del Database (Neon.tech)
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false } // Richiesto per Neon.tech
+    ssl: { rejectUnauthorized: false } // Richiesto obbligatoriamente da Neon
 });
 
-// Comando di benvenuto /start
+// 3. Finto Server HTTP per ingannare il controllo di Render
+const app = express();
+app.get('/', (req, res) => {
+    res.send('Bot Telegram di Chat of Honor attivo ed in ascolto! 🤖');
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+    console.log(`[Render Fix] Finto server HTTP attivo sulla porta ${PORT}`);
+});
+
+// 4. Logica del Bot Telegram - Comando /start
 bot.start((ctx) => {
     ctx.reply(
-        "🏆 Benvenuto nel Bot Ufficiale di Chat of Honor!\n\n" +
-        "Usa il comando `/elo NomeGiocatore` per conoscere il punteggio attuale di un quizzer.\n" +
-        "Esempio: `/elo RRT`",
+        "🏆 *Benvenuto nel Bot ELO di Chat of Honor!*\n\n" +
+        "Usa il comando `/elo NomeGiocatore` per conoscere in tempo reale il punteggio in classifica di un quizzer.\n\n" +
+        "📌 *Esempio:* `/elo RRT` o `/elo WillYouPray`",
         { parse_mode: 'Markdown' }
     );
 });
 
-// Comando principale /elo
+// 5. Logica del Bot Telegram - Comando /elo Username
 bot.command('elo', async (ctx) => {
-    // Recupera il testo dopo il comando /elo
     const msgText = ctx.message.text.trim();
     const args = msgText.split(/\s+/);
 
-    // Se l'utente ha scritto solo "/elo" senza specificare il nome
+    // Controllo se l'utente non ha specificato nessun nome
     if (args.length < 2) {
-        return ctx.reply("⚠️ Specifica il nome del giocatore!\nEsempio: `/elo WillYouPray`", { parse_mode: 'Markdown' });
+        return ctx.reply("⚠️ *Specifica il nome del giocatore!*\nEsempio: `/elo WillYouPray`", { parse_mode: 'Markdown' });
     }
 
-    // Ricostruisce il nome nel caso ci siano spazi (es. "The All-Father Lore")
+    // Ricostruisce il nome dell'utente tenendo conto di eventuali spazi (es: "The All-Father Lore")
     const usernameCercato = args.slice(1).join(' ').trim();
 
     try {
-        // ILIKE rende la ricerca case-insensitive (ignora maiuscole/minuscole)
+        // ILIKE esegue una ricerca Case-Insensitive (ignora maiuscole e minuscole)
         const queryText = 'SELECT username, elo FROM quizzers WHERE username ILIKE $1';
         const res = await pool.query(queryText, [usernameCercato]);
 
         if (res.rows.length > 0) {
             const quizzer = res.rows[0];
-            // Arrotonda l'Elo a 1 cifra decimale per estetica
+            // Arrotonda l'Elo a una cifra decimale per pulizia visiva
             const eloFormattato = Number(quizzer.elo).toFixed(1);
 
             ctx.reply(
-                `📊 *Scheda Quizzer*:\n\n` +
+                `📊 *Scheda Federazione Quizzer*:\n\n` +
                 `👤 *Giocatore:* ${quizzer.username}\n` +
                 `🏆 *Punteggio ELO:* \`${eloFormattato}\``,
                 { parse_mode: 'Markdown' }
             );
         } else {
-            ctx.reply(`❌ Giocatore *"${usernameCercato}"* non trovato nel database della federazione.`, { parse_mode: 'Markdown' });
+            ctx.reply(`❌ Il giocatore *"${usernameCercato}"* non è stato trovato nel database del Roster.`, { parse_mode: 'Markdown' });
         }
     } catch (err) {
-        console.error("Errore database:", err);
-        ctx.reply("🤖 Errore interno del bot durante la lettura del database.");
+        console.error("Errore durante la query al database:", err);
+        ctx.reply("🤖 *Errore interno:* Impossibile comunicare con il database delle classifiche in questo momento.");
     }
 });
 
-// Avvio del Bot
+// 6. Avvio ufficiale del Bot in polling costante
 bot.launch()
-    .then(() => console.log('🤖 Telegram Bot online e pronto a ricevere comandi!'))
-    .catch((err) => console.error('Errore durante l'avvio del bot: ', err));
+    .then(() => console.log('🤖 Telegram Bot online e sincronizzato con il database!'))
+    .catch((err) => console.error('Errore critico durante il lancio del Bot:', err));
 
-// Gestione della chiusura sicura
+// Gestione della terminazione pulita del processo su Render
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
