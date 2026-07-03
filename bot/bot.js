@@ -82,6 +82,6 @@ bot.launch()
     .then(() => console.log('🤖 Telegram Bot online e sincronizzato con il database!'))
     .catch((err) => console.error('Errore critico durante il lancio del Bot:', err));
 
-// Gestione della terminazione pulita del processo su Render
+// Gestione della terminazione pulita del processo su Render .
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
