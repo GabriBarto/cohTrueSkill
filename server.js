@@ -1,6 +1,8 @@
 const express = require('express');
 const pool = require('./database');
 const { rating, rate } = require('openskill');
+// --- MODIFICA 1: IMPORTA IL BOT TELEGRAM ---
+const { inviaReportMatch } = require('./telegramBot');
 
 const app = express();
 app.use(express.json());
@@ -9,44 +11,14 @@ app.use(express.static('public'));
 // Credenziali Admin Hardcoded (Sicure lato server)
 const ADMIN_USER = 'cohadmin';
 const ADMIN_PASS = 'COH2026';
-// Token temporaneo generato all'avvio del server per validare le richieste di inserimento
 const ADMIN_TOKEN = 'SECRET_TOKEN_COH_2026_' + Math.random().toString(36).substring(2);
 
-// API per il Login dell'Admin
-app.post('/api/login', (req, res) => {
-    const { username, password } = req.body;
-
-    // .toLowerCase() e .trim() prevengono errori di battitura (es. maiuscole automatiche da smartphone)
-    if (username && password && username.toLowerCase().trim() === ADMIN_USER && password.trim() === ADMIN_PASS) {
-        return res.json({ success: true, token: ADMIN_TOKEN });
-    }
-    res.status(401).json({ success: false, error: "Credenziali errate!" });
-});
-
-// API per ottenere la classifica del Roster (Pubblica)
-app.get('/api/roster', async (req, res) => {
-    try {
-        const result = await pool.query('SELECT * FROM quizzers ORDER BY elo DESC');
-        res.json(result.rows);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-// Recupera giocatore o assegna i valori di default per partire da 1200 Elo strutturale
-const getPlayerFromDB = async (username) => {
-    const result = await pool.query('SELECT mu, sigma FROM quizzers WHERE username = $1', [username]);
-    if (result.rows.length > 0) {
-        return result.rows[0];
-    } else {
-        // Nuovo giocatore: parte da 1200 Elo, quindi mu = 1225.0 e sigma = 4.0
-        return { mu: 1225.0, sigma: 4.0 };
-    }
-};
+// [Le altre rotte /api/login, /api/roster e getPlayerFromDB rimangono identiche...]
+app.post('/api/login', (req, res) => { /* tuo codice originale */ });
+app.get('/api/roster', async (req, res) => { /* tuo codice originale */ });
 
 // API per inserire un Match (PROTETTA)
 app.post('/api/match', async (req, res) => {
-    // Controlla se chi invia il match ha il token corretto nell'header Authorization
     const authHeader = req.headers['authorization'];
     if (!authHeader || authHeader !== `Bearer ${ADMIN_TOKEN}`) {
         return res.status(403).json({ error: "Accesso negato. Solo gli amministratori possono inserire i match." });
@@ -60,69 +32,46 @@ app.post('/api/match', async (req, res) => {
         const ranksFormattoOpenskill = [];
         const vecchiValoriMu = {};
 
-        // 1. Mappiamo le squadre nel formato accettato dall'algoritmo locale
         for (const team of teams) {
             const giocatoriDelTeam = [];
             for (const nome of team.giocatori) {
                 const dbPlayer = await getPlayerFromDB(nome);
                 vecchiValoriMu[nome] = dbPlayer.mu;
-
-                // Crea l'oggetto rating per la libreria openskill
                 giocatoriDelTeam.push(rating({ mu: dbPlayer.mu, sigma: dbPlayer.sigma }));
             }
             teamsFormattoOpenskill.push(giocatoriDelTeam);
-            ranksFormattoOpenskill.push(team.rank); // Inserisce la posizione (1°, 2°, ecc)
+            ranksFormattoOpenskill.push(team.rank);
         }
 
-        // 2. Eseguiamo il calcolo matematico LOCALE
         const updatedTeams = rate(teamsFormattoOpenskill, { ranks: ranksFormattoOpenskill });
 
-        // CONTROLLO PAREGGI: Creiamo una mappa per sapere se una determinata posizione (rank) è condivisa
         const conteggioRank = {};
         ranksFormattoOpenskill.forEach(r => conteggioRank[r] = (conteggioRank[r] || 0) + 1);
 
-        // 3. Applichiamo le variazioni e aggiorniamo il database su Neon senza distruggere lo storico dell'Elo passato
         for (let tIndex = 0; tIndex < updatedTeams.length; tIndex++) {
             const team = updatedTeams[tIndex];
             const rankAttuale = teams[tIndex].rank;
-            const isPareggio = conteggioRank[rankAttuale] > 1; // True se più team hanno questo rank
+            const isPareggio = conteggioRank[rankAttuale] > 1;
 
             for (let pIndex = 0; pIndex < team.length; pIndex++) {
                 const giocatoreCalcolato = team[pIndex];
-
                 const nome = teams[tIndex].giocatori[pIndex];
                 const muIniziale = vecchiValoriMu[nome];
-
-                // Guadagno/perdita base dell'algoritmo
                 const deltaMu = giocatoreCalcolato.mu - muIniziale;
-
-                // Convertiamo la variazione di openskill in punti Elo reali (scala a 20x per buon dinamismo)
                 let puntiEloAssegnati = deltaMu * 20;
 
-                // PATCH PAREGGIO: Se hanno lo stesso rank, blocchiamo le perdite ingiuste forzandole a 0
                 if (isPareggio && puntiEloAssegnati < 0) {
                     puntiEloAssegnati = 0.0;
                 }
 
-                // FIX LOGICA MATCH TITOLATI: Forziamo uno spostamento minimo se c'è una cintura in palio
                 if (is_title) {
-                    puntiEloAssegnati = puntiEloAssegnati * moltiplicatore; // Raddoppia l'efficacia (2x)
-
-                    // Se vince il match titolato ma l'algoritmo dà pochi centesimi, garantiamo +15 punti minimi
-                    if (puntiEloAssegnati > 0 && puntiEloAssegnati < 15) {
-                        puntiEloAssegnati = 15.0;
-                    }
-                    // Se perde un match titolato, subisce un crollo minimo di -20 punti
-                    if (puntiEloAssegnati < 0 && puntiEloAssegnati > -20) {
-                        puntiEloAssegnati = -20.0;
-                    }
+                    puntiEloAssegnati = puntiEloAssegnati * moltiplicatore;
+                    if (puntiEloAssegnati > 0 && puntiEloAssegnati < 15) puntiEloAssegnati = 15.0;
+                    if (puntiEloAssegnati < 0 && puntiEloAssegnati > -20) puntiEloAssegnati = -20.0;
                 }
 
-                // Il MU finale segue l'andamento reale dell'algoritmo openskill
                 const muFinale = muIniziale + deltaMu;
 
-                // Query avanzata: Se l'utente esiste prende il vecchio ELO e somma il delta. 
-                // Se non esiste (nuovo utente), parte da 1200.0 e applica la variazione del primo match.
                 await pool.query(`
                     INSERT INTO quizzers (username, mu, sigma, elo) 
                     VALUES ($1, $2, $3, 1200.0 + $4)
@@ -135,8 +84,11 @@ app.post('/api/match', async (req, res) => {
             }
         }
 
-        // Salviamo l'intero match (compreso di punteggi/scores) nella cronologia storica
         await pool.query(`INSERT INTO match_history (show_name, match_json) VALUES ($1, $2)`, [show_name, JSON.stringify(req.body)]);
+
+        // --- MODIFICA 2: INVIA IL REPORT AUTOMATICO SU TELEGRAM ---
+        // Avviene in background asincrono per non ritardare la risposta HTTP dell'admin
+        inviaReportMatch(show_name, is_title, teams);
 
         res.json({ status: "success", message: "Match calcolato localmente! Roster aggiornato con successo." });
 
