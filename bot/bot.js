@@ -3,37 +3,26 @@ const { Pool } = require('pg');
 const express = require('express');
 require('dotenv').config();
 
-// Controllo delle variabili d'ambiente fondamentali
 if (!process.env.TELEGRAM_BOT_TOKEN || !process.env.DATABASE_URL) {
     console.error("Errore: Mancano le variabili d'ambiente TELEGRAM_BOT_TOKEN o DATABASE_URL.");
     process.exit(1);
 }
 
-// 1. Inizializzazione del Bot Telegram
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
-
-// 2. Inizializzazione del Database (Neon.tech)
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false } // Richiesto obbligatoriamente da Neon
+    ssl: { rejectUnauthorized: false }
 });
 
-// 3. Finto Server HTTP per il controllo di Render
 const app = express();
-app.get('/', (req, res) => {
-    res.send('Bot Telegram di Chat of Honor attivo ed in ascolto! 🤖');
-});
-
+app.get('/', (req, res) => res.send('Bot Telegram attivo! 🤖'));
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    console.log(`[Render Fix] Finto server HTTP attivo sulla porta ${PORT}`);
-});
+app.listen(PORT, () => console.log(`Server attivo sulla porta ${PORT}`));
 
-// 4. Logica del Bot Telegram - Comando /start
 bot.start((ctx) => {
     ctx.reply(
-        "🏆 <b>Benvenuto nel Bot di Chat of Honor!</b>\n\n" +
-        "Ecco i comandi disponibili:\n" +
+        "🏆 <b>Benvenuto nel Bot della Chat of Honor!</b>\n\n" +
+        "Comandi disponibili:\n" +
         "📊 <code>/elo NomeGiocatore</code> - Visualizza il punteggio ELO attuale.\n" +
         "📈 <code>/record NomeGiocatore</code> - Visualizza il record Win-Draw-Loss (W-D-L).\n\n" +
         "📌 <b>Esempio:</b> <code>/record RRT</code>",
@@ -41,134 +30,96 @@ bot.start((ctx) => {
     );
 });
 
-// 5. Comando /elo Username - Mostra solo l'ELO
+// Comando /elo
 bot.command('elo', async (ctx) => {
     const msgText = ctx.message.text.trim();
     const args = msgText.split(/\s+/);
-
-    if (args.length < 2) {
-        return ctx.reply("⚠️ <b>Specifica il nome del giocatore!</b>\nEsempio: <code>/elo RRT</code>", { parse_mode: 'HTML' });
-    }
+    if (args.length < 2) return ctx.reply("⚠️ <b>Specifica il nome del giocatore!</b>", { parse_mode: 'HTML' });
 
     const usernameCercato = args.slice(1).join(' ').trim();
-
     try {
-        const queryText = 'SELECT username, elo FROM quizzers WHERE username ILIKE $1';
-        const res = await pool.query(queryText, [usernameCercato]);
-
+        const res = await pool.query('SELECT username, elo FROM quizzers WHERE username ILIKE $1', [usernameCercato]);
         if (res.rows.length > 0) {
-            const quizzer = res.rows[0];
-            const eloFormattato = Number(quizzer.elo).toFixed(1);
-
-            ctx.reply(
-                `👤 <b>Giocatore:</b> ${quizzer.username}\n` +
-                `🏆 <b>Punteggio ELO:</b> <code>${eloFormattato}</code>`,
-                { parse_mode: 'HTML' }
-            );
+            ctx.reply(`👤 <b>Giocatore:</b> ${res.rows[0].username}\n🏆 <b>Punteggio ELO:</b> <code>${Number(res.rows[0].elo).toFixed(1)}</code>`, { parse_mode: 'HTML' });
         } else {
-            ctx.reply(`❌ Il giocatore "<b>${usernameCercato}</b>" non è stato trovato nel database.`, { parse_mode: 'HTML' });
+            ctx.reply(`❌ Il giocatore "<b>${usernameCercato}</b>" non è stato trovato.`, { parse_mode: 'HTML' });
         }
     } catch (err) {
         console.error(err);
-        ctx.reply("🤖 <b>Errore interno:</b> Impossibile recuperare l'ELO.");
+        ctx.reply("🤖 Errore nel recupero dell'ELO.");
     }
 });
 
-// 6. Comando /record Username - Mostra le statistiche W-D-L (QUERY ULTRA-OTTIMIZZATA)
+// Comando /record (LOGICA REVISIONATA LATO JAVASCRIPT - INFALLIBILE)
 bot.command('record', async (ctx) => {
     const msgText = ctx.message.text.trim();
     const args = msgText.split(/\s+/);
+    if (args.length < 2) return ctx.reply("⚠️ <b>Specifica il nome del giocatore!</b>", { parse_mode: 'HTML' });
 
-    if (args.length < 2) {
-        return ctx.reply("⚠️ <b>Specifica il nome del giocatore!</b>\nEsempio: <code>/record WillYouPray</code>", { parse_mode: 'HTML' });
-    }
-
-    const usernameCercato = args.slice(1).join(' ').trim();
+    const usernameCercato = args.slice(1).join(' ').trim().toLowerCase();
 
     try {
-        // Query pulita: usa jsonb_to_recordset per spacchettare in modo nativo la struttura del match_json
-        const queryText = `
-            WITH match_teams AS (
-                SELECT 
-                    m.id AS match_id,
-                    t.rank::int AS team_rank,
-                    giocatore AS player_name
-                FROM match_history m,
-                LATERAL jsonb_to_recordset(m.match_json->'teams') AS t(rank text, giocatori jsonb),
-                LATERAL jsonb_array_elements_text(t.giocatori) AS giocatore
-            ),
-            match_ties AS (
-                SELECT 
-                    match_id,
-                    team_rank,
-                    COUNT(*) AS teams_at_rank
-                FROM (
-                    SELECT DISTINCT match_id, team_rank, jugadores_group 
-                    FROM match_history m, 
-                    LATERAL jsonb_to_recordset(m.match_json->'teams') AS t(rank text, giocatori jsonb),
-                    LATERAL jsonb_array_elements_text(t.giocatori) AS jugadores_group
-                ) dist
-                GROUP BY match_id, team_rank
-            ),
-            calculated_matches AS (
-                SELECT 
-                    f.player_name,
-                    CASE 
-                        WHEN f.team_rank = 1 AND COALESCE(t.teams_at_rank, 1) = 1 THEN 'win'
-                        WHEN COALESCE(t.teams_at_rank, 1) > 1 THEN 'draw'
-                        ELSE 'loss'
-                    END AS outcome
-                FROM match_teams f
-                LEFT JOIN match_ties t ON f.match_id = t.match_id AND f.team_rank = t.team_rank
-            ),
-            stats AS (
-                SELECT 
-                    player_name,
-                    COUNT(CASE WHEN outcome = 'win' THEN 1 END) AS wins,
-                    COUNT(CASE WHEN outcome = 'draw' THEN 1 END) AS draws,
-                    COUNT(CASE WHEN outcome = 'loss' THEN 1 END) AS losses
-                FROM calculated_matches
-                GROUP BY player_name
-            )
-            SELECT 
-                q.username, 
-                COALESCE(s.wins, 0) AS wins,
-                COALESCE(s.draws, 0) AS draws,
-                COALESCE(s.losses, 0) AS losses
-            FROM quizzers q
-            LEFT JOIN stats s ON q.username ILIKE s.player_name
-            WHERE q.username ILIKE $1;
-        `;
-
-        const res = await pool.query(queryText, [usernameCercato]);
-
-        if (res.rows.length > 0) {
-            const quizzer = res.rows[0];
-            const totalMatch = Number(quizzer.wins) + Number(quizzer.draws) + Number(quizzer.losses);
-
-            ctx.reply(
-                `📈 <b>Record Storico Federazione</b>\n` +
-                `👤 <b>Quizzer:</b> ${quizzer.username}\n\n` +
-                `🟢 Vittorie (W): <code>${quizzer.wins}</code>\n` +
-                `🟡 Pareggi (D): <code>${quizzer.draws}</code>\n` +
-                `🔴 Sconfitte (L): <code>${quizzer.losses}</code>\n\n` +
-                `🔢 Match Totali: <code>${totalMatch}</code>`,
-                { parse_mode: 'HTML' }
-            );
-        } else {
-            ctx.reply(`❌ Il giocatore "<b>${usernameCercato}</b>" non è stato trovato nel database del Roster.`, { parse_mode: 'HTML' });
+        // 1. Controlliamo prima se il giocatore esiste nel roster
+        const checkUser = await pool.query('SELECT username FROM quizzers WHERE username ILIKE $1', [usernameCercato]);
+        if (checkUser.rows.length === 0) {
+            return ctx.reply(`❌ Il giocatore "<b>${args.slice(1).join(' ')}</b>" non è stato trovato nel database.`, { parse_mode: 'HTML' });
         }
+
+        const nomeCorrettoUfficiale = checkUser.rows[0].username;
+
+        // 2. Prendiamo tutta la cronologia dei match (Query semplicissima, non può fallire)
+        const matchRes = await pool.query('SELECT match_json FROM match_history');
+
+        let wins = 0;
+        let draws = 0;
+        let losses = 0;
+
+        // 3. Spacchettiamo i JSON con JavaScript
+        for (const row of matchRes.rows) {
+            const match = row.match_json;
+            if (!match || !match.teams) continue;
+
+            // Troviamo il team in cui si trovava il giocatore cercato in questo match
+            const teamDelGiocatore = match.teams.find(t =>
+                t.giocatori && t.giocatori.some(g => g.toLowerCase().trim() === usernameCercato)
+            );
+
+            // Se il giocatore ha preso parte a questo match, calcoliamo il risultato
+            if (teamDelGiocatore) {
+                const rankDelGiocatore = parseInt(teamDelGiocatore.rank);
+
+                // Contiamo quanti team hanno fatto lo stesso rank in questo match (per i pareggi)
+                const teamConStessoRank = match.teams.filter(t => parseInt(t.rank) === rankDelGiocatore).length;
+
+                if (teamConStessoRank > 1) {
+                    draws++; // Più team hanno lo stesso posizionamento = Pareggio
+                } else if (rankDelGiocatore === 1) {
+                    wins++;  // Primo posto solitario = Vittoria
+                } else {
+                    losses++; // Posizionamento solitario superiore a 1 = Sconfitta
+                }
+            }
+        }
+
+        const totalMatch = wins + draws + losses;
+
+        ctx.reply(
+            `📈 <b>Record Storico Federazione</b>\n` +
+            `👤 <b>Quizzer:</b> ${nomeCorrettoUfficiale}\n\n` +
+            `... Vittorie (W): <code>${wins}</code>\n` +
+            `... Pareggi (D): <code>${draws}</code>\n` +
+            `... Sconfitte (L): <code>${losses}</code>\n\n` +
+            `... Match Totali: <code>${totalMatch}</code>`,
+            { parse_mode: 'HTML' }
+        );
+
     } catch (err) {
-        console.error("Errore SQL Dettagliato:", err.message);
-        ctx.reply("🤖 <b>Errore interno:</b> Errore nell'elaborazione dei dati storici.", { parse_mode: 'HTML' });
+        console.error("Errore JS nel calcolo dei record:", err);
+        ctx.reply("🤖 <b>Errore interno:</b> Impossibile elaborare i dati storici.", { parse_mode: 'HTML' });
     }
 });
 
-// 7. Avvio ufficiale del Bot in polling costante
-bot.launch()
-    .then(() => console.log('🤖 Telegram Bot online con comandi /elo e /record separati!'))
-    .catch((err) => console.error('Errore critico durante il lancio del Bot:', err));
+bot.launch().then(() => console.log('🤖 Bot Telegram Online con calcolo JS integrato!'));
 
-// Gestione della terminazione pulita del processo su Render
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
