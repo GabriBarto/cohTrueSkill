@@ -32,10 +32,10 @@ app.listen(PORT, () => {
 // 4. Logica del Bot Telegram - Comando /start
 bot.start((ctx) => {
     ctx.reply(
-        "🏆 *Benvenuto nel Bot ELO di Chat of Honor!*\n\n" +
-        "Usa il comando `/elo NomeGiocatore` per conoscere in tempo reale il punteggio in classifica di un quizzer.\n\n" +
-        "📌 *Esempio:* `/elo RRT` o `/elo WillYouPray`",
-        { parse_mode: 'Markdown' }
+        "🏆 <b>Benvenuto nel Bot ELO di Chat of Honor!</b>\n\n" +
+        "Usa il comando <code>/elo NomeGiocatore</code> per conoscere in tempo reale il punteggio in classifica di un quizzer.\n\n" +
+        "📌 <b>Esempio:</b> <code>/elo RRT</code> oppure <code>/elo The_Samoan_Ingobernable</code>",
+        { parse_mode: 'HTML' }
     );
 });
 
@@ -46,10 +46,10 @@ bot.command('elo', async (ctx) => {
 
     // Controllo se l'utente non ha specificato nessun nome
     if (args.length < 2) {
-        return ctx.reply("⚠️ *Specifica il nome del giocatore!*\nEsempio: `/elo WillYouPray`", { parse_mode: 'Markdown' });
+        return ctx.reply("⚠️ <b>Specifica il nome del giocatore!</b>\nEsempio: <code>/elo WillYouPray</code>", { parse_mode: 'HTML' });
     }
 
-    // Ricostruisce il nome dell'utente tenendo conto di eventuali spazi (es: "The All-Father Lore")
+    // Ricostruisce il nome dell'utente tenendo conto di eventuali spazi
     const usernameCercato = args.slice(1).join(' ').trim();
 
     try {
@@ -63,17 +63,17 @@ bot.command('elo', async (ctx) => {
             const eloFormattato = Number(quizzer.elo).toFixed(1);
 
             ctx.reply(
-                `📊 *Scheda Federazione Quizzer*:\n\n` +
-                `👤 *Giocatore:* ${quizzer.username}\n` +
-                `🏆 *Punteggio ELO:* \`${eloFormattato}\``,
-                { parse_mode: 'Markdown' }
+                `📊 <b>Scheda Federazione Quizzer</b>:\n\n` +
+                `👤 <b>Giocatore:</b> ${quizzer.username}\n` +
+                `🏆 <b>Punteggio ELO:</b> <code>${eloFormattato}</code>`,
+                { parse_mode: 'HTML' }
             );
         } else {
-            ctx.reply(`❌ Il giocatore *"${usernameCercato}"* non è stato trovato nel database del Roster.`, { parse_mode: 'Markdown' });
+            ctx.reply(`❌ Il giocatore "<b>${usernameCercato}</b>" non è stato trovato nel database del Roster.`, { parse_mode: 'HTML' });
         }
     } catch (err) {
         console.error("Errore durante la query al database:", err);
-        ctx.reply("🤖 *Errore interno:* Impossibile comunicare con il database delle classifiche in questo momento.");
+        ctx.reply("🤖 <b>Errore interno:</b> Impossibile comunicare con il database delle classifiche in questo momento.", { parse_mode: 'HTML' });
     }
 });
 
